@@ -91,6 +91,7 @@ Call `setup()` with a table to override any defaults. All keys are optional.
     host = '127.0.0.1',        -- string:  server bind address
     browser = '',              -- string:  browser command (auto-detect if empty)
     auto_close = true,         -- boolean: close browser tab when preview stops
+                               --          also stops server when tab is closed
     auto_start = false,        -- boolean: auto-start on opening .md files
     scroll_sync = true,        -- boolean: bidirectional scroll sync
     theme = 'auto',            -- string:  'auto', 'light', or 'dark'

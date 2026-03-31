@@ -11,6 +11,8 @@ function M.new(config)
     clients = {},
     config = config,
     _on_scroll = nil,
+    _on_empty = nil,
+    _empty_timer = nil,
   }, M)
 end
 
@@ -159,6 +161,12 @@ function M:on_scroll(callback)
   self._on_scroll = callback
 end
 
+--- Register a callback for when all clients have disconnected.
+---@param callback fun()
+function M:on_empty(callback)
+  self._on_empty = callback
+end
+
 --- Broadcast a message to all connected WebSocket clients.
 ---@param message string
 function M:broadcast(message)
@@ -175,6 +183,7 @@ function M:broadcast(message)
 end
 
 --- Remove and close a WebSocket client.
+--- Fires `_on_empty` callback (debounced 500ms) when no clients remain.
 ---@param socket userdata
 function M:remove_client(socket)
   for i = #self.clients, 1, -1 do
@@ -186,13 +195,42 @@ function M:remove_client(socket)
       pcall(function()
         socket:close()
       end)
-      return
+      break
     end
+  end
+
+  -- Debounced empty-check: wait 500ms so page refreshes don't trigger a stop
+  if #self.clients == 0 and self._on_empty then
+    if self._empty_timer then
+      self._empty_timer:stop()
+      self._empty_timer:close()
+    end
+    local timer = vim.uv.new_timer()
+    self._empty_timer = timer
+    timer:start(500, 0, function()
+      timer:stop()
+      timer:close()
+      vim.schedule(function()
+        self._empty_timer = nil
+        if #self.clients == 0 and self._on_empty then
+          self._on_empty()
+        end
+      end)
+    end)
   end
 end
 
 --- Send close frames to all clients and shut down all connections.
 function M:close_all()
+  -- Cancel debounced empty-check to avoid firing on_empty during intentional shutdown
+  if self._empty_timer then
+    pcall(function()
+      self._empty_timer:stop()
+      self._empty_timer:close()
+    end)
+    self._empty_timer = nil
+  end
+
   local ws = require('markdown-live-preview.server.websocket')
   for _, entry in ipairs(self.clients) do
     pcall(function()

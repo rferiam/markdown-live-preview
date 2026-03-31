@@ -26,6 +26,17 @@ function M.start(config)
 
   _router = Router.new(config)
 
+  -- Auto-stop when all browser tabs close (guarded by auto_close config)
+  if config.auto_close then
+    _router:on_empty(function()
+      vim.schedule(function()
+        if M.is_running() then
+          require('markdown-live-preview').stop()
+        end
+      end)
+    end)
+  end
+
   _server = http.create_server(config.host, config.port, function(client, method, path, headers, body)
     _router:handle_request(client, method, path, headers, body)
   end)

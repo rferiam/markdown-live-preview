@@ -71,7 +71,8 @@ require('markdown-live-preview').setup({
   port = 8090,               -- HTTP server port
   host = '127.0.0.1',        -- Server bind address
   browser = '',              -- Browser command (auto-detect if empty)
-  auto_close = true,         -- Close browser tab when preview stops
+  auto_close = true,         -- Close browser tab when preview stops;
+                             -- also stops server when tab is closed
   auto_start = false,        -- Auto-start preview when opening .md files
   scroll_sync = true,        -- Bidirectional scroll sync
   theme = 'auto',            -- 'auto', 'light', or 'dark'
