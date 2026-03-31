@@ -1,0 +1,254 @@
+*markdown-live-preview.txt*  Browser-based markdown preview with live updates
+
+Author: rferia
+License: MIT
+Version: 2.0.0
+
+==============================================================================
+CONTENTS                                     *markdown-live-preview-contents*
+
+  1. Introduction ..................... |markdown-live-preview-introduction|
+  2. Requirements ..................... |markdown-live-preview-requirements|
+  3. Installation ..................... |markdown-live-preview-installation|
+  4. Configuration .................... |markdown-live-preview-configuration|
+  5. Commands ......................... |markdown-live-preview-commands|
+  6. Keybindings ...................... |markdown-live-preview-keys|
+  7. Lua API .......................... |markdown-live-preview-api|
+  8. How It Works ..................... |markdown-live-preview-architecture|
+  9. Health Check ..................... |markdown-live-preview-health|
+  10. License ......................... |markdown-live-preview-license|
+
+==============================================================================
+1. INTRODUCTION                           *markdown-live-preview-introduction*
+
+markdown-live-preview opens a browser-based preview of your markdown files
+with live updates and bidirectional scroll sync. As you type in Neovim, the
+preview updates in real time.
+
+Under the hood, the plugin starts a local HTTP + WebSocket server using
+`vim.uv` (libuv), serves a self-contained HTML page, and pushes buffer
+content to the browser via WebSocket on every change.
+
+Features:~
+  • Live preview in your default browser
+  • Real-time updates as you type (debounced)
+  • Bidirectional scroll sync between Neovim and browser
+  • GitHub-flavored markdown rendering (marked.js)
+  • Syntax highlighting for code blocks (highlight.js)
+  • Mermaid diagram support (mermaid.js)
+  • Dark/light theme with auto-detection and manual toggle
+  • Zero external Neovim dependencies (pure Lua + vim.uv)
+
+==============================================================================
+2. REQUIREMENTS                           *markdown-live-preview-requirements*
+
+  • Neovim >= 0.9.0
+  • A web browser
+  • `openssl` CLI tool (for WebSocket handshake)
+  • `curl` CLI tool (for downloading JS/CSS assets on first run)
+
+All requirements are standard on macOS and most Linux distributions.
+
+Run `:checkhealth markdown-live-preview` to verify your setup.
+
+==============================================================================
+3. INSTALLATION                           *markdown-live-preview-installation*
+
+Using lazy.nvim:~
+>lua
+  {
+    'rferia/markdown-live-preview',
+    cmd = { 'MarkdownPreview', 'MarkdownPreviewToggle' },
+    ft = 'markdown',
+    opts = {},
+  }
+<
+
+Using packer.nvim:~
+>lua
+  use({
+    'rferia/markdown-live-preview',
+    config = function()
+      require('markdown-live-preview').setup()
+    end,
+  })
+<
+
+Using mini.deps:~
+>lua
+  MiniDeps.add({ source = 'rferia/markdown-live-preview' })
+  require('markdown-live-preview').setup()
+<
+
+==============================================================================
+4. CONFIGURATION                         *markdown-live-preview-configuration*
+
+Call `setup()` with a table to override any defaults. All keys are optional.
+
+>lua
+  require('markdown-live-preview').setup({
+    port = 8090,               -- integer: HTTP server port
+    host = '127.0.0.1',        -- string:  server bind address
+    browser = '',              -- string:  browser command (auto-detect if empty)
+    auto_close = true,         -- boolean: close browser tab when preview stops
+    auto_start = false,        -- boolean: auto-start on opening .md files
+    scroll_sync = true,        -- boolean: bidirectional scroll sync
+    theme = 'auto',            -- string:  'auto', 'light', or 'dark'
+    debounce_ms = 100,         -- integer: debounce for content updates (ms)
+    scroll_debounce_ms = 50,   -- integer: debounce for scroll sync (ms)
+    keys = {                   -- table|false: keybindings (false to disable all)
+      preview = '<leader>mp',  -- string|false: start preview
+      stop = '<leader>ms',     -- string|false: stop preview
+      toggle = '<leader>mt',   -- string|false: toggle preview
+    },
+  })
+<
+
+                                             *markdown-live-preview-port*
+port ~
+  The port the local HTTP server listens on. Change this if 8090 is in use.
+
+                                             *markdown-live-preview-browser*
+browser ~
+  Custom browser command. If empty, the plugin auto-detects:
+    macOS:   `open`
+    Linux:   `xdg-open`
+    WSL:     `wslview` (or `cmd.exe /c start`)
+    Windows: `cmd.exe /c start`
+
+                                             *markdown-live-preview-theme*
+theme ~
+  Initial theme for the preview page.
+    `'auto'`  — follow system preference (prefers-color-scheme)
+    `'light'` — force light mode
+    `'dark'`  — force dark mode
+  Users can toggle the theme in-browser via the toggle button. The
+  preference is saved to localStorage.
+
+==============================================================================
+5. COMMANDS                                   *markdown-live-preview-commands*
+
+                                                         *:MarkdownPreview*
+:MarkdownPreview
+  Start the preview server and open the browser. Attaches to the current
+  markdown buffer. Calls `setup()` automatically if needed.
+
+                                                     *:MarkdownPreviewStop*
+:MarkdownPreviewStop
+  Stop the preview server, send a close signal to the browser tab, and
+  detach from the buffer.
+
+                                                   *:MarkdownPreviewToggle*
+:MarkdownPreviewToggle
+  Toggle the preview on or off.
+
+==============================================================================
+6. KEYBINDINGS                                     *markdown-live-preview-keys*
+
+Default keybindings are set buffer-locally on markdown files during `setup()`:
+
+  `<leader>mp`  Start preview         *markdown-live-preview-key-preview*
+  `<leader>ms`  Stop preview          *markdown-live-preview-key-stop*
+  `<leader>mt`  Toggle preview        *markdown-live-preview-key-toggle*
+
+Customize keybindings via the `keys` config option: >lua
+  require('markdown-live-preview').setup({
+    keys = {
+      preview = '<leader>mp',    -- set to false to disable
+      stop = '<leader>ms',
+      toggle = '<C-p>',          -- custom binding
+    },
+  })
+<
+
+Disable all keybindings: >lua
+  require('markdown-live-preview').setup({
+    keys = false,
+  })
+<
+
+When using lazy.nvim, you can also use the `keys` spec for lazy-loading: >lua
+  {
+    'rferia/markdown-live-preview',
+    ft = 'markdown',
+    keys = {
+      { '<leader>mp', '<cmd>MarkdownPreview<cr>', ft = 'markdown' },
+      { '<leader>ms', '<cmd>MarkdownPreviewStop<cr>', ft = 'markdown' },
+      { '<leader>mt', '<cmd>MarkdownPreviewToggle<cr>', ft = 'markdown' },
+    },
+    opts = {},
+  }
+<
+
+==============================================================================
+7. LUA API                                        *markdown-live-preview-api*
+
+All functions are accessible via `require('markdown-live-preview')`.
+
+                                               *markdown-live-preview.setup()*
+setup({config?})
+  Initialize the plugin with optional configuration overrides.
+
+  Parameters:~
+    {config}  `table|nil`  Configuration overrides (deep-merged with
+              defaults). See |markdown-live-preview-configuration|.
+
+                                              *markdown-live-preview.start()*
+start()
+  Start the preview. Downloads JS/CSS assets if needed, starts the HTTP +
+  WebSocket server, attaches to the current buffer, and opens the browser.
+
+                                               *markdown-live-preview.stop()*
+stop()
+  Stop the preview. Sends a close signal to the browser (if `auto_close`
+  is true), detaches from the buffer, and shuts down the server.
+
+                                             *markdown-live-preview.toggle()*
+toggle()
+  Toggle the preview on or off.
+
+                                         *markdown-live-preview.is_running()*
+is_running()
+  Returns `true` if the preview server is currently active.
+
+  Returns:~
+    `boolean`
+
+==============================================================================
+8. HOW IT WORKS                          *markdown-live-preview-architecture*
+
+  1. `:MarkdownPreview` triggers `start()`.
+  2. JS/CSS assets (marked.js, highlight.js, mermaid.js) are downloaded to
+     `stdpath('data')/markdown-live-preview/` on first run.
+  3. An HTTP server binds to `host:port` using `vim.uv.new_tcp()`.
+  4. The browser is opened at `http://host:port`.
+  5. The browser loads the preview page (HTML/CSS/JS served locally).
+  6. The page establishes a WebSocket connection to the server.
+  7. Buffer autocommands (`TextChanged`, `TextChangedI`) fire on edits,
+     pushing the full buffer content via WebSocket.
+  8. The browser renders markdown client-side using `marked.parse()`.
+  9. `WinScrolled` / `CursorMoved` events push scroll position to the
+     browser. The browser reciprocates scroll events back to Neovim.
+  10. On `:MarkdownPreviewStop`, a close message is sent via WebSocket.
+      The page's JavaScript calls `window.close()`.
+
+==============================================================================
+9. HEALTH CHECK                               *markdown-live-preview-health*
+
+Run `:checkhealth markdown-live-preview` to verify:
+
+  • Neovim version >= 0.9
+  • `vim.uv` is available
+  • Browser command is detectable
+  • `curl` is available (for asset download)
+  • `openssl` is available (for WebSocket handshake)
+  • Cached JS/CSS assets exist
+  • Server status
+
+==============================================================================
+10. LICENSE                                     *markdown-live-preview-license*
+
+MIT License. Copyright (c) 2025 rferia.
+See the LICENSE file in the plugin root for full text.
+
+ vim:tw=78:ts=8:ft=help:norl:
